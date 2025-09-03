@@ -1,0 +1,129 @@
+
+body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: linear-gradient(135deg, #74ebd5 0%, #ACB6E5 100%);
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 420px;
+    margin: 60px auto 24px auto;
+    background: rgba(255,255,255,0.95);
+    border-radius: 16px;
+    box-shadow: 0 4px 32px rgba(0,0,0,0.13);
+    padding: 36px 28px 32px 28px;
+    text-align: center;
+    position: relative;
+}
+
+h1 {
+    margin-bottom: 28px;
+    color: #222;
+    font-size: 2.2rem;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+#weatherForm {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 24px;
+}
+
+#cityInput {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1.5px solid #b2bec3;
+    border-radius: 8px;
+    font-size: 17px;
+    outline: none;
+    transition: border 0.2s;
+}
+#cityInput:focus {
+    border: 1.5px solid #74ebd5;
+    background: #f8fafd;
+}
+
+button {
+    padding: 10px 20px;
+    background: linear-gradient(90deg, #74ebd5 0%, #ACB6E5 100%);
+    border: none;
+    border-radius: 8px;
+    color: #222;
+    font-weight: bold;
+    font-size: 16px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(116,235,213,0.08);
+    transition: background 0.2s, transform 0.1s;
+}
+button:hover, button:focus {
+    background: linear-gradient(90deg, #ACB6E5 0%, #74ebd5 100%);
+    transform: translateY(-2px) scale(1.03);
+}
+
+.weather-result {
+    min-height: 60px;
+    font-size: 19px;
+    color: #222;
+    margin-top: 10px;
+    text-align: left;
+    padding: 0 8px;
+}
+.weather-result h2 {
+    margin: 0 0 8px 0;
+    font-size: 1.4rem;
+    color: #0077b6;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.weather-result img {
+    vertical-align: middle;
+    margin-right: 6px;
+}
+.weather-result p {
+    margin: 4px 0;
+    font-size: 1.05em;
+}
+
+/* Loader Spinner */
+.loader {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #74ebd5;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    animation: spin 1s linear infinite;
+    margin: 18px auto 0 auto;
+    display: block;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Footer */
+.footer {
+    text-align: center;
+    color: #333;
+    font-size: 15px;
+    margin-bottom: 18px;
+    margin-top: auto;
+    opacity: 0.8;
+}
+.footer a {
+    color: #0077b6;
+    text-decoration: none;
+    font-weight: 500;
+}
+.footer a:hover {
+    text-decoration: underline;
+}
