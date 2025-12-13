@@ -3,20 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Weather App</title>
+    <meta name="description" content="Modern weather app to check current weather conditions for any city worldwide">
+    <title>Weather App | Check Weather Anywhere</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-    <div class="container">
-        <h1><span aria-label="Weather" role="img">☀️</span> Weather App</h1>
-        <form id="weatherForm" autocomplete="off">
-            <input type="text" id="cityInput" placeholder="Enter city name" aria-label="City name" required autofocus>
-            <button type="submit" aria-label="Get Weather">Get Weather</button>
+    <div class="background-animation"></div>
+    <main class="container">
+        <header class="app-header">
+            <h1 class="app-title">
+                <span class="weather-icon" aria-hidden="true">🌤️</span>
+                <span>Weather Forecast</span>
+            </h1>
+            <p class="app-subtitle">Get real-time weather information for any city</p>
+        </header>
+
+        <form id="weatherForm" class="search-form" autocomplete="off" novalidate>
+            <div class="input-wrapper">
+                <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input 
+                    type="text" 
+                    id="cityInput" 
+                    class="city-input" 
+                    placeholder="Enter city name..." 
+                    aria-label="City name" 
+                    required 
+                    autofocus
+                    autocomplete="off"
+                >
+            </div>
+            <button type="submit" class="submit-btn" aria-label="Get Weather">
+                <span class="btn-text">Search</span>
+                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
+            </button>
         </form>
-        <div id="loader" class="loader" style="display:none;"></div>
-        <div id="weatherResult" class="weather-result"></div>
-    </div>
-    <footer class="footer">Powered by <a href="https://openweathermap.org/" target="_blank" rel="noopener">OpenWeatherMap</a></footer>
+
+        <div id="loader" class="loader" aria-hidden="true" style="display:none;">
+            <div class="loader-spinner"></div>
+            <p class="loader-text">Fetching weather data...</p>
+        </div>
+
+        <div id="weatherResult" class="weather-result" role="region" aria-live="polite" aria-atomic="true"></div>
+
+        <div id="errorMessage" class="error-message" role="alert" aria-live="assertive"></div>
+    </main>
+
+    <footer class="footer">
+        <p>Powered by <a href="https://openweathermap.org/" target="_blank" rel="noopener noreferrer">OpenWeatherMap</a></p>
+    </footer>
+
     <script src="assets/app.js"></script>
 </body>
 </html>
