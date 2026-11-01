@@ -1,42 +1,30 @@
 # Weather App
 
-A responsive weather app built with HTML, CSS, and vanilla JavaScript. Search for a city to view current conditions, temperature, humidity, wind, pressure, and visibility.
+A responsive weather app built with HTML, CSS, and vanilla JavaScript. Search for a city to view current conditions, temperature, humidity, wind, pressure, and visibility. City search uses Open-Meteo Geocoding; weather conditions come from the Open-Meteo Forecast API.
 
 ## Requirements
 
-- Node.js 20.6 or newer
-- An OpenWeatherMap API key
+- Node.js 18 or newer
 
-The project has no third-party runtime or development dependencies.
+The app uses Open-Meteo's public APIs and needs no API key or third-party packages.
 
-## Setup
-
-Set the API key in your environment, then start the app from the project directory.
-
-**PowerShell**
-
-```powershell
-$env:OPENWEATHER_API_KEY = "your-new-api-key"
-npm start
-```
-
-**macOS / Linux**
+## Run locally
 
 ```sh
-export OPENWEATHER_API_KEY="your-new-api-key"
 npm start
 ```
 
-Open [http://127.0.0.1:3000](http://127.0.0.1:3000). Do not open `index.html` directly; the app uses the local server for both static files and the weather API proxy.
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000). Do not open `index.html` directly; run the local server so city search can use the same-origin API proxy.
 
-## Scripts
+Set `PORT` to change the port. The server binds to `127.0.0.1` by default; set `HOST=0.0.0.0` only when access from another device is intended.
 
-| Command | Description |
-| --- | --- |
-| `npm start` | Start the static app server and same-origin weather API proxy. |
-| `npm test` | Run the built-in Node.js server tests. |
+## Tests
 
-Set `PORT` to change the server port. Set `HOST=0.0.0.0` only when the app needs to be reachable from outside the local machine.
+```sh
+npm test
+```
+
+Tests use Node's built-in test runner and stub Open-Meteo responses; they do not require a key or make live API requests.
 
 ## Project structure
 
@@ -47,18 +35,18 @@ Set `PORT` to change the server port. Set `HOST=0.0.0.0` only when the app needs
 │   ├── style.css       # Responsive layout, design tokens, and motion styles
 │   └── icons/          # Reserved weather icon assets
 ├── test/
-│   └── server.test.js  # HTTP and API-proxy tests using node:test
-├── index.html          # Accessible app markup
-├── server.js           # Static file server and OpenWeatherMap proxy
-└── package.json        # Start and test scripts (no dependencies)
+│   └── server.test.js  # HTTP and Open-Meteo proxy tests
+├── index.html          # App markup
+├── server.js           # Static file server and weather API proxy
+└── package.json        # Start/test scripts; no third-party dependencies
 ```
 
-## API key security
+## Data and privacy
 
-The browser requests weather data from `/api/weather`; the server adds `OPENWEATHER_API_KEY` when it contacts OpenWeatherMap. Keep the key in the server environment and never put it in `assets/app.js`, HTML, or a public environment file.
+The browser sends the city name to the local server. The server looks up its coordinates with Open-Meteo Geocoding, then requests current weather from Open-Meteo Forecast. No API key is required. Search terms are sent to Open-Meteo to resolve a location. Weather data is attributed in the app footer.
 
-**The API key previously committed to this repository must be revoked or rotated in OpenWeatherMap before using or deploying this version.** Removing a key from the latest source does not remove it from Git history.
+The app displays current weather for one searched city at a time. Forecast views, saved locations, and geolocation are not implemented.
 
-## Current scope
+## Previously exposed OpenWeatherMap key
 
-This app shows current weather for one searched city at a time. Forecasts, saved locations, and geolocation are not implemented.
+An older version of this repository included an OpenWeatherMap API key in its public Git history. This version no longer uses that key. Revoke or rotate it with OpenWeatherMap; removing it from the latest source does not erase it from prior commits.

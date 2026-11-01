@@ -19,7 +19,7 @@ const weatherCardTemplate = `
         <h2 class="weather-city" id="weatherCity"></h2>
         <p class="weather-country"></p>
       </div>
-      <img class="weather-icon-large" alt="" width="80" height="80">
+      <span class="weather-icon-large" aria-hidden="true"></span>
     </header>
     <div class="weather-main">
       <p class="weather-temp"></p>
@@ -55,19 +55,16 @@ const weatherCardTemplate = `
 `;
 
 function isValidWeatherData(data) {
-  const weather = data?.weather?.[0];
-  const main = data?.main;
-  const wind = data?.wind;
-
   return (
     typeof data?.name === "string" &&
-    typeof weather?.description === "string" &&
-    /^\d{2}[dn]$/.test(weather?.icon ?? "") &&
-    Number.isFinite(main?.temp) &&
-    Number.isFinite(main?.feels_like) &&
-    Number.isFinite(main?.humidity) &&
-    Number.isFinite(main?.pressure) &&
-    Number.isFinite(wind?.speed)
+    typeof data?.description === "string" &&
+    Number.isFinite(data?.current?.temperature_2m) &&
+    Number.isFinite(data?.current?.apparent_temperature) &&
+    Number.isFinite(data?.current?.relative_humidity_2m) &&
+    Number.isFinite(data?.current?.weather_code) &&
+    Number.isFinite(data?.current?.wind_speed_10m) &&
+    Number.isFinite(data?.current?.wind_direction_10m) &&
+    Number.isFinite(data?.current?.pressure_msl)
   );
 }
 
@@ -85,6 +82,18 @@ function formatWindDirection(degrees) {
     "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
   ];
   return directions[Math.round(degrees / 22.5) % directions.length];
+}
+
+function getWeatherIcon(code) {
+  if (code === 0) return "☀️";
+  if (code === 1 || code === 2) return "🌤️";
+  if (code === 3) return "☁️";
+  if (code === 45 || code === 48) return "🌫️";
+  if ([51, 53, 55, 56, 57].includes(code)) return "🌦️";
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return "🌧️";
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return "🌨️";
+  if ([95, 96, 99].includes(code)) return "⛈️";
+  return "🌡️";
 }
 
 function showLoader() {
@@ -131,24 +140,24 @@ function renderWeather(data) {
   const card = document.createElement("template");
   card.innerHTML = weatherCardTemplate;
   const weatherCard = card.content.firstElementChild;
-  const weather = data.weather[0];
-  const icon = weatherCard.querySelector(".weather-icon-large");
+  const current = data.current;
 
   weatherCard.querySelector(".weather-city").textContent = data.name;
   weatherCard.querySelector(".weather-country").textContent =
-    typeof data.sys?.country === "string" ? data.sys.country : "";
-  weatherCard.querySelector(".weather-temp").textContent = formatTemperature(data.main.temp);
-  weatherCard.querySelector(".weather-description").textContent = weather.description;
-  icon.src = `https://openweathermap.org/img/wn/${weather.icon}@2x.png`;
-  icon.alt = `Weather: ${weather.description}`;
+    typeof data.country === "string" ? data.country : "";
+  weatherCard.querySelector(".weather-temp").textContent =
+    formatTemperature(current.temperature_2m);
+  weatherCard.querySelector(".weather-description").textContent = data.description;
+  weatherCard.querySelector(".weather-icon-large").textContent =
+    getWeatherIcon(current.weather_code);
 
   const values = [
-    formatTemperature(data.main.feels_like),
-    `${data.main.humidity}%`,
-    `${data.wind.speed.toFixed(1)} m/s`,
-    formatWindDirection(data.wind.deg),
-    `${data.main.pressure} hPa`,
-    Number.isFinite(data.visibility) ? `${(data.visibility / 1000).toFixed(1)} km` : "N/A",
+    formatTemperature(current.apparent_temperature),
+    `${current.relative_humidity_2m}%`,
+    `${current.wind_speed_10m.toFixed(1)} km/h`,
+    formatWindDirection(current.wind_direction_10m),
+    `${Math.round(current.pressure_msl)} hPa`,
+    Number.isFinite(current.visibility) ? `${(current.visibility / 1000).toFixed(1)} km` : "N/A",
   ];
 
   weatherCard.querySelectorAll(".detail-value").forEach((value, index) => {

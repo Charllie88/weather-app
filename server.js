@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const projectRoot = dirname(fileURLToPath(import.meta.url));
-const weatherApiUrl = "https://api.openweathermap.org/data/2.5/weather";
+const geocodingApiUrl = "https://geocoding-api.open-meteo.com/v1/search";
+const forecastApiUrl = "https://api.open-meteo.com/v1/forecast";
 const staticFiles = new Map([
   ["/", ["index.html", "text/html; charset=utf-8"]],
   ["/index.html", ["index.html", "text/html; charset=utf-8"]],
@@ -21,24 +22,76 @@ function sendJson(response, statusCode, payload) {
   response.end(JSON.stringify(payload));
 }
 
-function isWeatherPayload(data) {
-  const weather = data?.weather?.[0];
-  const main = data?.main;
-  const wind = data?.wind;
-
+function isCurrentWeather(data) {
+  const current = data?.current;
   return (
-    typeof data?.name === "string" &&
-    typeof weather?.description === "string" &&
-    /^\d{2}[dn]$/.test(weather?.icon ?? "") &&
-    Number.isFinite(main?.temp) &&
-    Number.isFinite(main?.feels_like) &&
-    Number.isFinite(main?.humidity) &&
-    Number.isFinite(main?.pressure) &&
-    Number.isFinite(wind?.speed)
+    Number.isFinite(current?.temperature_2m) &&
+    Number.isFinite(current?.apparent_temperature) &&
+    Number.isFinite(current?.relative_humidity_2m) &&
+    Number.isFinite(current?.weather_code) &&
+    Number.isFinite(current?.wind_speed_10m) &&
+    Number.isFinite(current?.wind_direction_10m) &&
+    Number.isFinite(current?.pressure_msl) &&
+    Number.isFinite(current?.visibility)
   );
 }
 
-async function handleWeatherRequest(requestUrl, response, { apiKey, fetchImpl }) {
+async function fetchOpenMeteoJson(url, fetchImpl) {
+  let upstreamResponse;
+  try {
+    upstreamResponse = await fetchImpl(url, {
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (error) {
+    if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+      const timeoutError = new Error("The weather service took too long to respond. Try again.");
+      timeoutError.statusCode = 504;
+      throw timeoutError;
+    }
+
+    console.error("Open-Meteo request failed:", error);
+    const networkError = new Error("Unable to reach the weather service. Try again later.");
+    networkError.statusCode = 502;
+    throw networkError;
+  }
+
+  if (!upstreamResponse.ok) {
+    const upstreamError = new Error(
+      upstreamResponse.status === 429
+        ? "Weather search limit reached. Try again later."
+        : "The weather service could not complete this request.",
+    );
+    upstreamError.statusCode = upstreamResponse.status === 429 ? 429 : 502;
+    throw upstreamError;
+  }
+
+  try {
+    return await upstreamResponse.json();
+  } catch {
+    const invalidResponseError = new Error("The weather service returned an invalid response.");
+    invalidResponseError.statusCode = 502;
+    throw invalidResponseError;
+  }
+}
+
+function getWeatherDescription(code) {
+  if (code === 0) return "Clear sky";
+  if (code === 1) return "Mainly clear";
+  if (code === 2) return "Partly cloudy";
+  if (code === 3) return "Overcast";
+  if (code === 45 || code === 48) return "Fog";
+  if ([51, 53, 55].includes(code)) return "Drizzle";
+  if ([56, 57].includes(code)) return "Freezing drizzle";
+  if ([61, 63, 65].includes(code)) return "Rain";
+  if ([66, 67].includes(code)) return "Freezing rain";
+  if ([71, 73, 75, 77].includes(code)) return "Snow";
+  if ([80, 81, 82].includes(code)) return "Rain showers";
+  if ([85, 86].includes(code)) return "Snow showers";
+  if (code === 95 || code === 96 || code === 99) return "Thunderstorm";
+  return null;
+}
+
+async function handleWeatherRequest(requestUrl, response, { fetchImpl }) {
   const city = requestUrl.searchParams.get("city")?.trim();
   if (!city) {
     sendJson(response, 400, { error: "Enter a city name to search." });
@@ -50,68 +103,70 @@ async function handleWeatherRequest(requestUrl, response, { apiKey, fetchImpl })
     return;
   }
 
-  if (!apiKey) {
-    sendJson(response, 503, { error: "Weather service is not configured on the server." });
-    return;
-  }
-
-  const upstreamUrl = new URL(weatherApiUrl);
-  upstreamUrl.searchParams.set("q", city);
-  upstreamUrl.searchParams.set("appid", apiKey);
-  upstreamUrl.searchParams.set("units", "metric");
-
-  let upstreamResponse;
   try {
-    upstreamResponse = await fetchImpl(upstreamUrl, {
-      signal: AbortSignal.timeout(10_000),
-    });
-  } catch (error) {
-    if (error?.name === "TimeoutError" || error?.name === "AbortError") {
-      sendJson(response, 504, { error: "The weather service took too long to respond. Try again." });
-      return;
-    }
+    const geocodingUrl = new URL(geocodingApiUrl);
+    geocodingUrl.searchParams.set("name", city);
+    geocodingUrl.searchParams.set("count", "1");
+    geocodingUrl.searchParams.set("language", "en");
+    geocodingUrl.searchParams.set("format", "json");
+    const geocodingData = await fetchOpenMeteoJson(geocodingUrl, fetchImpl);
+    const location = geocodingData?.results?.[0];
 
-    console.error("Weather service request failed:", error);
-    sendJson(response, 502, { error: "Unable to reach the weather service. Try again later." });
-    return;
-  }
-
-  let data;
-  try {
-    data = await upstreamResponse.json();
-  } catch {
-    sendJson(response, 502, { error: "The weather service returned an invalid response." });
-    return;
-  }
-
-  if (!upstreamResponse.ok) {
-    if (upstreamResponse.status === 404) {
+    if (
+      typeof location?.name !== "string" ||
+      !Number.isFinite(location.latitude) ||
+      !Number.isFinite(location.longitude)
+    ) {
       sendJson(response, 404, { error: "City not found. Check the spelling and try again." });
       return;
     }
-    if (upstreamResponse.status === 429) {
-      sendJson(response, 429, { error: "Weather search limit reached. Try again later." });
+
+    const forecastUrl = new URL(forecastApiUrl);
+    forecastUrl.searchParams.set("latitude", String(location.latitude));
+    forecastUrl.searchParams.set("longitude", String(location.longitude));
+    forecastUrl.searchParams.set(
+      "current",
+      [
+        "temperature_2m",
+        "relative_humidity_2m",
+        "apparent_temperature",
+        "weather_code",
+        "wind_speed_10m",
+        "wind_direction_10m",
+        "pressure_msl",
+        "visibility",
+      ].join(","),
+    );
+    forecastUrl.searchParams.set("temperature_unit", "celsius");
+    forecastUrl.searchParams.set("wind_speed_unit", "kmh");
+    forecastUrl.searchParams.set("timezone", "auto");
+
+    const forecastData = await fetchOpenMeteoJson(forecastUrl, fetchImpl);
+    if (!isCurrentWeather(forecastData)) {
+      sendJson(response, 502, { error: "The weather service returned incomplete data." });
       return;
     }
-    if (upstreamResponse.status === 401) {
-      sendJson(response, 502, { error: "Weather service configuration is invalid." });
+
+    const description = getWeatherDescription(forecastData.current.weather_code);
+    if (!description) {
+      sendJson(response, 502, { error: "The weather service returned an unsupported weather condition." });
       return;
     }
 
-    sendJson(response, 502, { error: "The weather service could not complete this request." });
-    return;
+    sendJson(response, 200, {
+      name: location.name,
+      country: location.country,
+      current: forecastData.current,
+      description,
+    });
+  } catch (error) {
+    sendJson(response, error.statusCode || 502, {
+      error: error.message || "Unable to retrieve weather. Try again later.",
+    });
   }
-
-  if (!isWeatherPayload(data)) {
-    sendJson(response, 502, { error: "The weather service returned incomplete data." });
-    return;
-  }
-
-  sendJson(response, 200, data);
 }
 
 export function createWeatherServer({
-  apiKey = process.env.OPENWEATHER_API_KEY,
   fetchImpl = fetch,
 } = {}) {
   return createServer(async (request, response) => {
@@ -133,7 +188,7 @@ export function createWeatherServer({
         return;
       }
 
-      await handleWeatherRequest(requestUrl, response, { apiKey, fetchImpl });
+      await handleWeatherRequest(requestUrl, response, { fetchImpl });
       return;
     }
 

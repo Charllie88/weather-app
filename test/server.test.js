@@ -4,8 +4,8 @@ import { createWeatherServer } from "../server.js";
 
 const activeServers = new Set();
 
-async function withServer(options, run) {
-  const server = createWeatherServer(options);
+async function withServer(fetchImpl, run) {
+  const server = createWeatherServer({ fetchImpl });
   activeServers.add(server);
   await new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -35,18 +35,43 @@ afterEach(async () => {
   activeServers.clear();
 });
 
-const validWeather = {
-  name: "London",
-  sys: { country: "GB" },
-  weather: [{ description: "clear sky", icon: "01d" }],
-  main: { temp: 18, feels_like: 17, humidity: 52, pressure: 1014 },
-  wind: { speed: 0, deg: 0 },
-  visibility: 10_000,
+const geocodingResponse = {
+  results: [{ name: "Berlin", country: "Germany", latitude: 52.52, longitude: 13.41 }],
 };
+
+const forecastResponse = {
+  current: {
+    temperature_2m: 18,
+    relative_humidity_2m: 52,
+    apparent_temperature: 17,
+    weather_code: 0,
+    wind_speed_10m: 0,
+    wind_direction_10m: 0,
+    pressure_msl: 1014,
+    visibility: 10_000,
+  },
+};
+
+function openMeteoStub({ geocoding = geocodingResponse, forecast = forecastResponse } = {}) {
+  const requestedUrls = [];
+
+  return {
+    requestedUrls,
+    fetchImpl: async (url) => {
+      const requestUrl = new URL(url);
+      requestedUrls.push(requestUrl);
+      if (requestUrl.hostname === "geocoding-api.open-meteo.com") {
+        return new Response(JSON.stringify(geocoding), { status: 200 });
+      }
+      return new Response(JSON.stringify(forecast), { status: 200 });
+    },
+  };
+}
 
 describe("weather app server", () => {
   it("serves the page and only allowlisted static assets", async () => {
-    await withServer({}, async (baseUrl) => {
+    const { fetchImpl } = openMeteoStub();
+    await withServer(fetchImpl, async (baseUrl) => {
       const page = await fetch(baseUrl);
       assert.equal(page.status, 200);
       assert.match(await page.text(), /Weather Forecast/);
@@ -56,15 +81,12 @@ describe("weather app server", () => {
     });
   });
 
-  it("rejects an empty city without calling the weather API", async () => {
+  it("rejects an empty city without calling Open-Meteo", async () => {
     let called = false;
     await withServer(
-      {
-        apiKey: "test-key",
-        fetchImpl: async () => {
-          called = true;
-          throw new Error("Unexpected API call");
-        },
+      async () => {
+        called = true;
+        throw new Error("Unexpected API call");
       },
       async (baseUrl) => {
         const response = await fetch(`${baseUrl}/api/weather?city=%20`);
@@ -74,60 +96,67 @@ describe("weather app server", () => {
     );
   });
 
-  it("reports missing server configuration clearly", async () => {
-    await withServer({ apiKey: "" }, async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/api/weather?city=London`);
-      assert.equal(response.status, 503);
-      assert.match((await response.json()).error, /not configured/);
+  it("geocodes a city and returns validated current weather", async () => {
+    const { fetchImpl, requestedUrls } = openMeteoStub();
+    await withServer(fetchImpl, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/weather?city=Berlin`);
+      const data = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(data.name, "Berlin");
+      assert.equal(data.country, "Germany");
+      assert.equal(data.description, "Clear sky");
+      assert.equal(data.current.temperature_2m, 18);
+      assert.equal(requestedUrls.length, 2);
+      assert.equal(requestedUrls[0].searchParams.get("name"), "Berlin");
+      assert.equal(requestedUrls[1].searchParams.get("latitude"), "52.52");
+      assert.equal(requestedUrls[1].searchParams.get("longitude"), "13.41");
+      assert.match(requestedUrls[1].searchParams.get("current"), /temperature_2m/);
+      assert.equal(requestedUrls[1].searchParams.get("wind_speed_unit"), "kmh");
+      assert.equal(requestedUrls[1].searchParams.has("appid"), false);
     });
   });
 
-  it("requests and returns validated weather data without exposing the key to the browser", async () => {
-    let requestedUrl;
+  it("returns a helpful not-found error when geocoding finds no city", async () => {
+    const { fetchImpl, requestedUrls } = openMeteoStub({ geocoding: { results: [] } });
+    await withServer(fetchImpl, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/weather?city=NotARealCity`);
+      assert.equal(response.status, 404);
+      assert.match((await response.json()).error, /City not found/);
+      assert.equal(requestedUrls.length, 1);
+    });
+  });
+
+  it("rejects incomplete successful forecast responses", async () => {
+    const { fetchImpl } = openMeteoStub({ forecast: { current: { temperature_2m: 18 } } });
+    await withServer(fetchImpl, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/weather?city=Berlin`);
+      assert.equal(response.status, 502);
+      assert.match((await response.json()).error, /incomplete data/);
+    });
+  });
+
+  it("maps Open-Meteo rate limits to a retryable user-facing error", async () => {
     await withServer(
-      {
-        apiKey: "server-only-test-key",
-        fetchImpl: async (url) => {
-          requestedUrl = new URL(url);
-          return new Response(JSON.stringify(validWeather), { status: 200 });
-        },
-      },
+      async () => new Response("{}", { status: 429 }),
       async (baseUrl) => {
-        const response = await fetch(`${baseUrl}/api/weather?city=New%20York`);
-        assert.equal(response.status, 200);
-        assert.equal((await response.json()).name, "London");
-        assert.equal(requestedUrl.searchParams.get("q"), "New York");
-        assert.equal(requestedUrl.searchParams.get("appid"), "server-only-test-key");
-        assert.equal(requestedUrl.searchParams.get("units"), "metric");
+        const response = await fetch(`${baseUrl}/api/weather?city=Berlin`);
+        assert.equal(response.status, 429);
+        assert.match((await response.json()).error, /limit reached/);
       },
     );
   });
 
-  it("maps an unknown city to a helpful not-found response", async () => {
-    await withServer(
-      {
-        apiKey: "test-key",
-        fetchImpl: async () => new Response("{}", { status: 404 }),
+  it("rejects unsupported weather codes instead of returning a broken card", async () => {
+    const { fetchImpl } = openMeteoStub({
+      forecast: {
+        current: { ...forecastResponse.current, weather_code: 999 },
       },
-      async (baseUrl) => {
-        const response = await fetch(`${baseUrl}/api/weather?city=NotARealCity`);
-        assert.equal(response.status, 404);
-        assert.match((await response.json()).error, /City not found/);
-      },
-    );
-  });
-
-  it("rejects malformed successful responses", async () => {
-    await withServer(
-      {
-        apiKey: "test-key",
-        fetchImpl: async () => new Response(JSON.stringify({ weather: [] }), { status: 200 }),
-      },
-      async (baseUrl) => {
-        const response = await fetch(`${baseUrl}/api/weather?city=London`);
-        assert.equal(response.status, 502);
-        assert.match((await response.json()).error, /incomplete data/);
-      },
-    );
+    });
+    await withServer(fetchImpl, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/weather?city=Berlin`);
+      assert.equal(response.status, 502);
+      assert.match((await response.json()).error, /unsupported weather condition/);
+    });
   });
 });

@@ -376,8 +376,11 @@ body {
 }
 
 .weather-icon-large {
+    display: grid;
     width: 80px;
     height: 80px;
+    place-items: center;
+    font-size: 4rem;
     filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
     animation: scaleIn 0.5s ease-out;
 }
@@ -654,6 +657,7 @@ body {
     .weather-icon-large {
         width: 64px;
         height: 64px;
+        font-size: 3.25rem;
     }
 }
 
