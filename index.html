@@ -21,40 +21,39 @@
             <p class="app-subtitle">Get real-time weather information for any city</p>
         </header>
 
-        <form id="weatherForm" class="search-form" autocomplete="off" novalidate>
+        <form id="weatherForm" class="search-form" role="search" autocomplete="off" novalidate>
             <div class="input-wrapper">
                 <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="11" cy="11" r="8"></circle>
                     <path d="m21 21-4.35-4.35"></path>
                 </svg>
+                <label class="visually-hidden" for="cityInput">City name</label>
                 <input 
                     type="text" 
                     id="cityInput" 
                     class="city-input" 
                     placeholder="Enter city name..." 
-                    aria-label="City name" 
                     required 
-                    autofocus
                     autocomplete="off"
                 >
             </div>
-            <button type="submit" class="submit-btn" aria-label="Get Weather">
+            <button type="submit" class="submit-btn">
                 <span class="btn-text">Search</span>
-                <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg class="btn-icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                     <polyline points="12 5 19 12 12 19"></polyline>
                 </svg>
             </button>
         </form>
 
-        <div id="loader" class="loader" aria-hidden="true" style="display:none;">
+        <div id="loader" class="loader" role="status" aria-live="polite" aria-atomic="true" hidden>
             <div class="loader-spinner"></div>
             <p class="loader-text">Fetching weather data...</p>
         </div>
 
-        <div id="weatherResult" class="weather-result" role="region" aria-live="polite" aria-atomic="true"></div>
+        <div id="weatherResult" class="weather-result" role="region" aria-label="Current weather" aria-live="polite" aria-atomic="true" aria-busy="false" hidden></div>
 
-        <div id="errorMessage" class="error-message" role="alert" aria-live="assertive"></div>
+        <div id="errorMessage" class="error-message" role="alert" aria-live="assertive" hidden></div>
     </main>
 
     <footer class="footer">
