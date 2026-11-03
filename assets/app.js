@@ -169,25 +169,110 @@ function renderWeather(data) {
 }
 
 async function fetchWeather(city) {
+  const geocodingUrl = new URL("https://geocoding-api.open-meteo.com/v1/search");
+  geocodingUrl.searchParams.set("name", city);
+  geocodingUrl.searchParams.set("count", "1");
+  geocodingUrl.searchParams.set("language", "en");
+  geocodingUrl.searchParams.set("format", "json");
+
+  const geocodingResponse = await fetchOpenMeteoJson(geocodingUrl);
+  const location = geocodingResponse?.results?.[0];
+  if (
+    typeof location?.name !== "string" ||
+    !Number.isFinite(location.latitude) ||
+    !Number.isFinite(location.longitude)
+  ) {
+    throw new Error("City not found. Check the spelling and try again.");
+  }
+
+  const forecastUrl = new URL("https://api.open-meteo.com/v1/forecast");
+  forecastUrl.searchParams.set("latitude", String(location.latitude));
+  forecastUrl.searchParams.set("longitude", String(location.longitude));
+  forecastUrl.searchParams.set(
+    "current",
+    [
+      "temperature_2m",
+      "relative_humidity_2m",
+      "apparent_temperature",
+      "weather_code",
+      "wind_speed_10m",
+      "wind_direction_10m",
+      "pressure_msl",
+      "visibility",
+    ].join(","),
+  );
+  forecastUrl.searchParams.set("temperature_unit", "celsius");
+  forecastUrl.searchParams.set("wind_speed_unit", "kmh");
+  forecastUrl.searchParams.set("timezone", "auto");
+
+  const forecastResponse = await fetchOpenMeteoJson(forecastUrl);
+  const current = forecastResponse?.current;
+  if (
+    !Number.isFinite(current?.temperature_2m) ||
+    !Number.isFinite(current?.apparent_temperature) ||
+    !Number.isFinite(current?.relative_humidity_2m) ||
+    !Number.isFinite(current?.weather_code) ||
+    !Number.isFinite(current?.wind_speed_10m) ||
+    !Number.isFinite(current?.wind_direction_10m) ||
+    !Number.isFinite(current?.pressure_msl) ||
+    !Number.isFinite(current?.visibility)
+  ) {
+    throw new Error("The weather service returned incomplete data. Try again.");
+  }
+
+  const description = getWeatherDescription(current.weather_code);
+  if (!description) {
+    throw new Error("The weather service returned an unsupported weather condition.");
+  }
+
+  return {
+    name: location.name,
+    country: location.country,
+    current,
+    description,
+  };
+}
+
+async function fetchOpenMeteoJson(url) {
   let response;
   try {
-    response = await fetch(`/api/weather?city=${encodeURIComponent(city)}`);
+    response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
   } catch {
-    throw new Error("Network error. Check your connection and try again.");
+    throw new Error("Unable to reach the weather service. Check your connection and try again.");
   }
 
   let data;
   try {
     data = await response.json();
   } catch {
-    throw new Error("The weather server returned an invalid response.");
+    throw new Error("The weather service returned an invalid response.");
   }
 
   if (!response.ok) {
-    throw new Error(data?.error || "Unable to retrieve weather. Try again later.");
+    if (response.status === 429) {
+      throw new Error("Weather search limit reached. Try again later.");
+    }
+    throw new Error("The weather service could not complete this request.");
   }
 
   return data;
+}
+
+function getWeatherDescription(code) {
+  if (code === 0) return "Clear sky";
+  if (code === 1) return "Mainly clear";
+  if (code === 2) return "Partly cloudy";
+  if (code === 3) return "Overcast";
+  if (code === 45 || code === 48) return "Fog";
+  if ([51, 53, 55].includes(code)) return "Drizzle";
+  if ([56, 57].includes(code)) return "Freezing drizzle";
+  if ([61, 63, 65].includes(code)) return "Rain";
+  if ([66, 67].includes(code)) return "Freezing rain";
+  if ([71, 73, 75, 77].includes(code)) return "Snow";
+  if ([80, 81, 82].includes(code)) return "Rain showers";
+  if ([85, 86].includes(code)) return "Snow showers";
+  if (code === 95 || code === 96 || code === 99) return "Thunderstorm";
+  return null;
 }
 
 async function handleSubmit(event) {

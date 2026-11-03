@@ -2,6 +2,12 @@
 
 A responsive weather app built with HTML, CSS, and vanilla JavaScript. Search for a city to view current conditions, temperature, humidity, wind, pressure, and visibility. City search uses Open-Meteo Geocoding; weather conditions come from the Open-Meteo Forecast API.
 
+## Live demo
+
+The GitHub Pages deployment is configured to publish from the `main` branch using GitHub Actions. After Pages is enabled for the repository and the deployment workflow succeeds, the demo will be available at:
+
+https://charllie88.github.io/weather-app/
+
 ## Requirements
 
 - Node.js 18 or newer
@@ -43,7 +49,9 @@ Tests use Node's built-in test runner and stub Open-Meteo responses; they do not
 
 ## Data and privacy
 
-The browser sends the city name to the local server. The server looks up its coordinates with Open-Meteo Geocoding, then requests current weather from Open-Meteo Forecast. No API key is required. Search terms are sent to Open-Meteo to resolve a location. Weather data is attributed in the app footer.
+When deployed to GitHub Pages, the browser sends the city name to Open-Meteo Geocoding, then requests current weather from Open-Meteo Forecast using the resolved coordinates. No API key is required. Search terms are sent to Open-Meteo to resolve a location. Weather data is attributed in the app footer.
+
+For local development, `npm start` serves the static app and proxies weather requests through the included Node server.
 
 The app displays current weather for one searched city at a time. Forecast views, saved locations, and geolocation are not implemented.
 
